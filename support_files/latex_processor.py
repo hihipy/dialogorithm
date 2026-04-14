@@ -1,210 +1,92 @@
+"""
+latex_processor.py — LaTeX document assembly and PNG rendering for Dialogorithm.
+
+Assembles a complete LaTeX standalone document from per-digit equation
+expressions, compiles it to PDF via ``pdflatex``, and converts the result
+to a PNG image via ``pdftoppm``. Also logs a verification table that maps
+each expression to its expected digit value.
+"""
+
 import logging
 import os
+import random
 import shutil
 import subprocess
 import tempfile
-import random
-import sys
 import traceback
 from pathlib import Path
-from typing import Optional, Tuple, Set
-from datetime import datetime
+from typing import Optional, Set, Tuple
 
-# Import your custom equation bank module
 import equation_bank
 
-MAX_UNIQUE_ATTEMPTS = 15
-DEFAULT_DPI = 2400
-LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
-LOG_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+MAX_UNIQUE_ATTEMPTS: int = 15
+DEFAULT_DPI: int = 2400
 
-
-class RobustLogger:
-	def __init__(self, name: str = __name__, log_level: int = logging.INFO,
-	             log_file: Optional[str] = None, console_output: bool = True):
-		self.logger = logging.getLogger(name)
-		self.logger.setLevel(log_level)
-
-		if self.logger.handlers:
-			self.logger.handlers.clear()
-
-		formatter = logging.Formatter(fmt=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
-
-		if console_output:
-			console_handler = logging.StreamHandler(sys.stdout)
-			console_handler.setLevel(log_level)
-			console_handler.setFormatter(formatter)
-			self.logger.addHandler(console_handler)
-
-		if log_file is None:
-			timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-			log_file = f"latex_generator_{timestamp}.log"
-
-		try:
-			log_path = Path(log_file)
-			log_path.parent.mkdir(parents=True, exist_ok=True)
-			file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
-			file_handler.setLevel(logging.DEBUG)
-			file_handler.setFormatter(formatter)
-			self.logger.addHandler(file_handler)
-		except Exception as e:
-			print(f"Error setting up logger: {e}", file=sys.stderr)
-
-	def get_logger(self) -> logging.Logger:
-		return self.logger
-
-
-def setup_logger(debug_mode: bool = False) -> logging.Logger:
-	log_level = logging.DEBUG if debug_mode else logging.INFO
-	robust_logger = RobustLogger(__name__, log_level, console_output=False)
-	return robust_logger.get_logger()
-
-
-logger = setup_logger()
+logger = logging.getLogger(__name__)
 
 
 def log_function_entry_exit(func):
+	"""Decorator that logs entry and exit of the wrapped function at DEBUG level."""
+
 	def wrapper(*args, **kwargs):
-		logger.debug(f"ENTER {func.__name__} with args={args}, kwargs={kwargs}")
+		logger.debug("ENTER %s args=%s kwargs=%s", func.__name__, args, kwargs)
 		try:
 			result = func(*args, **kwargs)
-			logger.debug(f"EXIT {func.__name__} successfully")
+			logger.debug("EXIT %s OK", func.__name__)
 			return result
-		except Exception as e:
-			logger.error(f"EXIT {func.__name__} with exception: {e}")
+		except Exception as exc:
+			logger.error("EXIT %s with exception: %s", func.__name__, exc)
 			logger.debug(traceback.format_exc())
 			raise
 
 	return wrapper
 
 
-def create_verification_output(full_number_str: str, latex_parts: list, used_formulas: set,
-                               signature_text: str, output_dir: str) -> str:
-	"""
-	Creates a comprehensive verification file for GenAI evaluation.
-	"""
-	logger.info("Creating verification output for GenAI evaluation")
+def log_verification(full_number_str: str, latex_parts: list, signature_text: str) -> None:
+	"""Log a verification table mapping each LaTeX expression to its expected digit.
 
-	# Parse the phone number to extract expected digits
+	Args:
+		full_number_str: The full international phone number string (e.g. '+1 (202) 285-1684').
+		latex_parts: Ordered list of LaTeX fragments produced by the generator.
+		signature_text: The signature line used in the document.
+	"""
 	clean_number = "".join(filter(str.isdigit, full_number_str))
 	has_plus = full_number_str.strip().startswith('+')
 
-	# Build expected sequence
 	expected_sequence = []
 	if has_plus:
 		expected_sequence.append("+")
-
-	# Add country code if present
 	if has_plus and len(clean_number) == 11 and clean_number.startswith('1'):
-		expected_sequence.extend(list('1'))  # US country code
-		expected_sequence.extend(list(clean_number[1:]))  # Rest of number
+		expected_sequence.extend(list('1'))
+		expected_sequence.extend(list(clean_number[1:]))
 	elif has_plus and len(clean_number) > 10:
-		# International number - figure out country code
 		cc_len = len(clean_number) - 10 if len(clean_number) > 10 else 1
-		country_code = clean_number[:cc_len]
-		main_number = clean_number[cc_len:]
-		expected_sequence.extend(list(country_code))
-		expected_sequence.extend(list(main_number))
+		expected_sequence.extend(list(clean_number[:cc_len]))
+		expected_sequence.extend(list(clean_number[cc_len:]))
 	else:
 		expected_sequence.extend(list(clean_number))
 
-	# Create verification data
-	verification_data = {
-		"metadata": {
-			"timestamp": datetime.now().isoformat(),
-			"original_input": full_number_str,
-			"clean_digits": clean_number,
-			"has_plus_sign": has_plus,
-			"signature_text": signature_text,
-			"total_expressions": len(latex_parts),
-			"expected_sequence": expected_sequence
-		},
-		"expressions_to_verify": []
-	}
+	logger.info(f"--- VERIFICATION: {full_number_str} | Signature: {signature_text} ---")
+	logger.info(f"Expected sequence: {' '.join(map(str, expected_sequence))}")
 
-	# Process each expression
-	for i, latex_expr in enumerate(latex_parts):
-		# Skip formatting elements
+	expr_index = 0
+	for latex_expr in latex_parts:
 		if latex_expr in [r"\quad", r"\;", r"\text{---}", r"\boldsymbol{(}", r"\boldsymbol{)}"]:
 			continue
+		expected = expected_sequence[expr_index] if expr_index < len(expected_sequence) else "?"
+		logger.debug(f"  [{expr_index + 1}] expected={expected!r:>3}  latex={latex_expr}")
+		expr_index += 1
 
-		expected_value = None
-		expression_type = "unknown"
-
-		# Determine expected value based on position
-		expr_index = len(verification_data["expressions_to_verify"])
-		if expr_index < len(expected_sequence):
-			expected_value = expected_sequence[expr_index]
-			if expected_value == "+":
-				expression_type = "plus_symbol"
-			elif expected_value.isdigit():
-				expression_type = f"digit_{expected_value}"
-				expected_value = int(expected_value)
-
-		expr_data = {
-			"index": expr_index,
-			"latex_expression": latex_expr,
-			"expected_value": expected_value,
-			"expression_type": expression_type,
-			"verification_question": f"Does this expression evaluate to {expected_value}?",
-			"clean_latex": latex_expr.replace(r"\left(", "").replace(r"\right)", "").strip()
-		}
-
-		verification_data["expressions_to_verify"].append(expr_data)
-
-	# Create human-readable verification file
-	timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-	verification_filename = f"verification_{timestamp}.txt"
-	verification_path = os.path.join(output_dir, verification_filename)
-
-	try:
-		with open(verification_path, 'w', encoding='utf-8') as f:
-			f.write("=" * 80 + "\n")
-			f.write("DIALOGORITHM EQUATION VERIFICATION FILE\n")
-			f.write("=" * 80 + "\n\n")
-
-			f.write(f"🔍 VERIFICATION REQUEST\n")
-			f.write(f"Generated: {verification_data['metadata']['timestamp']}\n")
-			f.write(f"Original Input: {full_number_str}\n")
-			f.write(f"Expected Sequence: {' '.join(map(str, expected_sequence))}\n")
-			f.write(f"Signature: {signature_text}\n\n")
-
-			f.write("📝 TASK FOR AI EVALUATOR:\n")
-			f.write("Please verify that each mathematical expression below evaluates to its expected value.\n")
-			f.write("Respond with ✅ if correct, ❌ if incorrect, and briefly explain any errors.\n\n")
-
-			f.write("🧮 EXPRESSIONS TO VERIFY:\n")
-			f.write("-" * 60 + "\n\n")
-
-			for i, expr in enumerate(verification_data["expressions_to_verify"]):
-				f.write(f"Expression #{i + 1}:\n")
-				f.write(f"LaTeX: {expr['latex_expression']}\n")
-				f.write(f"Expected Value: {expr['expected_value']}\n")
-				f.write(f"Question: {expr['verification_question']}\n")
-				f.write(f"Type: {expr['expression_type']}\n")
-				f.write("\nVerification Result: [ ] ✅ Correct  [ ] ❌ Incorrect\n")
-				f.write("Notes: ________________________________\n")
-				f.write("\n" + "-" * 40 + "\n\n")
-
-			f.write("📊 SUMMARY CHECK:\n")
-			f.write(f"Total expressions verified: _____ / {len(verification_data['expressions_to_verify'])}\n")
-			f.write(f"Phone number reconstruction: ________________\n")
-			f.write(f"Overall assessment: [ ] ✅ All correct  [ ] ❌ Issues found\n\n")
-
-			f.write("=" * 80 + "\n")
-			f.write("END OF VERIFICATION FILE\n")
-			f.write("=" * 80 + "\n")
-
-		logger.info(f"✅ Verification file created: {verification_path}")
-		return verification_path
-
-	except Exception as e:
-		logger.error(f"Failed to create verification file: {e}")
-		return None
+	logger.info(f"--- END VERIFICATION ({expr_index} expressions) ---")
 
 
 @log_function_entry_exit
 def _get_unique_latex_for_digit(digit_char: str, used_formulas: Set[str]) -> str:
+	"""Return a LaTeX expression for *digit_char* not already in *used_formulas*.
+
+	Tries up to ``MAX_UNIQUE_ATTEMPTS`` times to find a fresh template.
+	Falls back to a random (possibly repeated) choice if the pool is exhausted.
+	"""
 	if not digit_char.isdigit():
 		return equation_bank.eq_placeholder(digit_char)
 
@@ -227,7 +109,23 @@ def _get_unique_latex_for_digit(digit_char: str, used_formulas: Set[str]) -> str
 # CRITICAL FIX 1: Replace the generate_latex_for_number function in latex_processor.py
 
 @log_function_entry_exit
-def generate_latex_for_number(full_number_str: str, signature_text: str = "Please call me at:") -> str:
+def generate_latex_for_number(
+		full_number_str: str,
+		signature_text: str = "Please call me at:",
+) -> str:
+	"""Build a LaTeX document for *full_number_str* and render it to PNG.
+
+	Args:
+		full_number_str: International phone number (e.g. '+1 (202) 285-1684').
+		signature_text: Header line displayed above the equations.
+
+	Returns:
+		Absolute path to the generated PNG file in ~/Downloads.
+
+	Raises:
+		ValueError: If *full_number_str* contains no digits.
+		RuntimeError: If LaTeX compilation or PNG conversion fails.
+	"""
 	if not full_number_str.strip():
 		raise ValueError("Phone number cannot be empty")
 
@@ -265,8 +163,7 @@ def generate_latex_for_number(full_number_str: str, signature_text: str = "Pleas
 	else:
 		latex_parts.extend([_get_unique_latex_for_digit(d, used_formulas) for d in main_number])
 
-	# 🔧 CRITICAL FIX: Break long equations into multiple lines
-	math_lines = format_equation_with_line_breaks(latex_parts)
+	math_line = format_equation_single_line(latex_parts)
 
 	escaped_signature = signature_text.translate(str.maketrans({
 		'\\': '\\textbackslash{}', '&': '\\&', '%': '\\%', '$': '\\$', '#': '\\#',
@@ -280,95 +177,61 @@ def generate_latex_for_number(full_number_str: str, signature_text: str = "Pleas
 		"\\usepackage{helvet}",
 		"\\renewcommand{\\familydefault}{\\sfdefault}",
 		"\\begin{document}",
-		"\\begin{center}",
-		"\\begin{minipage}{0.95\\linewidth}",  # Slightly narrower
+		"\\begin{minipage}{70cm}",
 		"\\centering",
-		f"{{\\Large \\textbf{{{escaped_signature}}}}}\\\\[0.5cm]",
-		"\\begin{align*}",
-		f"{math_lines}",
-		"\\end{align*}",
+		f"{{\\Large \\textbf{{{escaped_signature}}}}}\\\\[0.2cm]",
+		"\\[",
+		f"\\LARGE {math_line}",
+		"\\]",
 		"\\end{minipage}",
-		"\\end{center}",
 		"\\end{document}"
 	])
 
 	output_dir = os.path.join(str(Path.home()), "Downloads")
 	os.makedirs(output_dir, exist_ok=True)
 
-	# Create verification file
-	verification_path = None
-	try:
-		verification_path = create_verification_output(
-			full_number_str=full_number_str,
-			latex_parts=latex_parts,
-			used_formulas=used_formulas,
-			signature_text=signature_text,
-			output_dir=output_dir
-		)
-		if verification_path:
-			logger.info(f"📋 Verification file ready for AI evaluation: {verification_path}")
-	except Exception as e:
-		logger.warning(f"Could not create verification file: {e}")
+	# Log verification data
+	log_verification(full_number_str=full_number_str, latex_parts=latex_parts, signature_text=signature_text)
 
 	# Render PNG from LaTeX
-	image_path, msg = render_latex_to_png(latex_doc.strip(), output_dir=output_dir, dpi=600)
+	image_path, msg = render_latex_to_png(latex_doc.strip(), output_dir=output_dir, dpi=150)
 	if not image_path:
 		raise RuntimeError(msg)
 
-	logger.info(f"🎯 LaTeX image saved: {image_path}")
-	if verification_path:
-		logger.info(f"📋 Verification file: {verification_path}")
-
+	logger.info(f"Image saved: {image_path}")
 	return image_path
 
 
-def format_equation_with_line_breaks(latex_parts: list) -> str:
-	"""Break long equations into multiple lines for LaTeX compilation."""
+def format_equation_single_line(latex_parts: list) -> str:
+	"""Join all LaTeX fragments into a single display-math line.
 
-	lines = []
-	current_line = []
-	MAX_LINE_LENGTH = 3  # Max equations per line
+	Args:
+		latex_parts: Ordered list of LaTeX strings (expressions + separators).
 
-	# Manually step through parts to handle structure
-	i = 0
-	while i < len(latex_parts):
-		part = latex_parts[i]
-
-		# Start of area code
-		if part == r"\boldsymbol{(}":
-			# Add area code and its contents as one block
-			area_code_parts = [r"\boldsymbol{(}"]
-			i += 1
-			# Gather the 3 digits of the area code
-			for _ in range(3):
-				if i < len(latex_parts):
-					area_code_parts.append(latex_parts[i])
-					i += 1
-			if i < len(latex_parts) and latex_parts[i] == r"\boldsymbol{)}":
-				area_code_parts.append(r"\boldsymbol{)} ")
-				i += 1
-			current_line.append(" ".join(area_code_parts))
-
-		# Other parts
-		else:
-			current_line.append(part)
-			i += 1
-
-		# Check if line is full
-		if len(current_line) >= MAX_LINE_LENGTH:
-			lines.append(" ".join(current_line))
-			current_line = []
-
-	# Add any remaining parts
-	if current_line:
-		lines.append(" ".join(current_line))
-
-	# Format for the align* environment
-	return " \\\\\n".join([f"& {line}" for line in lines])
+	Returns:
+		A single space-joined string suitable for use inside ``\\[ ... \\]``.
+	"""
+	return " ".join(latex_parts)
 
 
 @log_function_entry_exit
-def render_latex_to_png(latex_doc_str: str, output_dir: str, dpi: int = DEFAULT_DPI) -> Tuple[Optional[str], str]:
+def render_latex_to_png(
+		latex_doc_str: str,
+		output_dir: str,
+		dpi: int = DEFAULT_DPI,
+) -> Tuple[Optional[str], str]:
+	"""Compile *latex_doc_str* to PDF then convert to PNG.
+
+	Args:
+		latex_doc_str: Complete LaTeX document source.
+		output_dir: Directory where the final PNG will be saved.
+		dpi: Resolution for the PNG output.
+
+	Returns:
+		A ``(path, message)`` tuple.  *path* is the absolute PNG path on
+		success, or ``None`` on failure.  *message* is ``"Success"`` or a
+		human-readable error description.
+	"""
 	if not latex_doc_str.strip():
 		return None, "Empty LaTeX document."
 

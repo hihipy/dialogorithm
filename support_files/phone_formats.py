@@ -1,25 +1,43 @@
 """
-phone_formats.py
+phone_formats.py — International phone number formatting and validation.
 
-Complete phone number formatting module for international standards.
-Contains all ~249 countries/territories with formatting rules, digit limits,
-and validation logic, organized by UN geoscheme continents and subregions.
+Covers 249+ countries and territories with per-country digit limits,
+display-formatting rules, and a UN Statistics Division M49 geoscheme
+classification (continents → subregions → countries).
 
-🎯 Key Features:
-- UN Statistics Division geoscheme classification
-- Local digit validation (excludes country codes)
-- Country-specific formatting rules
-- Complete world coverage (249+ entries)
-- Antarctica handled as proper subregion
+Typical usage::
 
-Usage:
-    from phone_formats import COUNTRIES_BY_CONTINENT, get_digit_limit, format_display_number
+    from phone_formats import get_digit_limit, format_display_number, extract_country_code_from_label
+
+    code, _ = extract_country_code_from_label("🇺🇸 United States")
+    print(format_display_number("2025551234", code))  # (202) 555-1234
 """
 
 import re
-from typing import Optional, Tuple, Dict, Any, List
+import warnings
+from typing import Any
 
-# --- Complete UN Geoscheme Data Structure ---
+__all__ = [
+	'COUNTRIES_BY_CONTINENT',
+	'ALL_COUNTRIES',
+	'LOCAL_DIGIT_LIMITS_BY_CODE',
+	'extract_country_code_from_label',
+	'get_digit_limit',
+	'format_display_number',
+	'validate_digit_input',
+	'get_country_list',
+	'get_format_example',
+	'get_all_country_codes',
+	'get_countries_by_continent',  # Deprecated but maintained for compatibility
+	'get_countries_by_continent_and_subregion',  # New UN geoscheme function
+	'get_continent_structure',
+	'search_countries',
+	'get_country_stats'
+]
+
+# ---------------------------------------------------------------------------
+# Country data — UN M49 geoscheme (continent → subregion → country)
+# ---------------------------------------------------------------------------
 COUNTRIES_BY_CONTINENT = {
 	'Africa': {
 		'Northern Africa': {
@@ -328,9 +346,11 @@ COUNTRIES_BY_CONTINENT = {
 	},
 }
 
-# --- LOCAL DIGIT LIMITS: CRITICAL FOR VALIDATION ---
-# These are LOCAL digits only (excluding country code)
-# Example: US is +1 (555) 123-4567 → LOCAL_DIGITS = "5551234567" (10 digits)
+# ---------------------------------------------------------------------------
+# Local digit limits by country calling code
+# Values are LOCAL digits only — the country-code prefix is excluded.
+# Example: US (+1) allows 10 local digits → "2025551234"
+# ---------------------------------------------------------------------------
 LOCAL_DIGIT_LIMITS_BY_CODE = {
 	1: 10,  # US/Canada/Caribbean
 	7: 10,  # Russia/Kazakhstan
@@ -541,8 +561,7 @@ LOCAL_DIGIT_LIMITS_BY_CODE = {
 	998: 9,  # Uzbekistan
 }
 
-# --- Utility Dictionary: A flat version for quick lookups ---
-# Generated programmatically to avoid redundancy.
+# Flat lookup dict generated from COUNTRIES_BY_CONTINENT — avoids redundancy.
 ALL_COUNTRIES = {}
 for continent_data in COUNTRIES_BY_CONTINENT.values():
 	if isinstance(continent_data, dict) and any(isinstance(v, dict) for v in continent_data.values()):
@@ -555,15 +574,16 @@ for continent_data in COUNTRIES_BY_CONTINENT.values():
 		ALL_COUNTRIES.update(continent_data)
 
 
-def extract_country_code_from_label(country_label: str) -> Optional[Tuple[int, str]]:
-	"""
-	Extract country code and an associated region code from a country label.
+def extract_country_code_from_label(country_label: str) -> tuple[int | None, str | None]:
+	"""Extract the numeric country code from a display label.
 
 	Args:
-		country_label: String like "🇺🇸 United States"
+		country_label: A label of the form ``"🇺🇸 United States"``.
 
 	Returns:
-		A tuple of (country_code, region_code) or (None, None) if not found.
+		``(country_code, region_code)`` on success, or ``(None, None)`` if the
+		label is not found.  *region_code* requires the optional
+		``phonenumbers`` library; falls back to ``None`` without it.
 	"""
 	fmt = ALL_COUNTRIES.get(country_label)
 	if not fmt:
@@ -576,7 +596,7 @@ def extract_country_code_from_label(country_label: str) -> Optional[Tuple[int, s
 
 	country_code = int(match.group(1))
 
-	# Optional: Extract region code using the phonenumbers library
+	# Attempt to enrich with region code via the optional phonenumbers library
 	try:
 		from phonenumbers.phonenumberutil import region_code_for_country_code
 		region = region_code_for_country_code(country_code)
@@ -601,15 +621,19 @@ def get_digit_limit(country_code: int) -> int:
 
 
 def format_display_number(digits: str, country_code: int) -> str:
-	"""
-	Format a string of LOCAL digits for display based on country-specific rules.
+	"""Format a local digit string for display using country-specific rules.
+
+	Explicit formatting is applied for US/Canada (1), UK (44), France (33),
+	Germany (49), Japan (81), South Korea (82), China (86), India (91), and
+	Australia (61).  All other countries use a generic grouping fallback.
 
 	Args:
-		digits: A string containing only the LOCAL phone number digits.
-		country_code: The international country calling code.
+		digits: Local phone digits only (no country code prefix).
+		country_code: The international country calling code (e.g. ``1`` for US).
 
 	Returns:
-		A formatted phone number string.
+		A human-readable string such as ``"(202) 555-1234"`` or ``"020 1234 5678"``.
+		Returns an empty string if *digits* is empty.
 	"""
 	if not digits:
 		return ""
@@ -671,7 +695,7 @@ def validate_digit_input(current_digits: str, country_code: int) -> bool:
 	return len(current_digits) <= max_digits
 
 
-def get_country_list() -> list:
+def get_country_list() -> list[str]:
 	"""
 	Get a single, sorted list of all available country labels.
 
@@ -694,7 +718,7 @@ def get_format_example(country_label: str) -> str:
 	return ALL_COUNTRIES.get(country_label, "")
 
 
-def get_countries_by_continent_and_subregion(continent: str = None, subregion: str = None) -> list:
+def get_countries_by_continent_and_subregion(continent: str | None = None, subregion: str | None = None) -> list[str]:
 	"""
 	Get countries filtered by continent and/or subregion according to UN geoscheme.
 
@@ -733,7 +757,7 @@ def get_countries_by_continent_and_subregion(continent: str = None, subregion: s
 	return sorted(continent_data[subregion].keys())
 
 
-def get_continent_structure() -> Dict[str, list]:
+def get_continent_structure() -> dict[str, list]:
 	"""
 	Get the complete UN geoscheme structure showing continents and their subregions.
 
@@ -749,22 +773,26 @@ def get_continent_structure() -> Dict[str, list]:
 	return structure
 
 
-# --- Helper functions for easy integration ---
-
-def get_all_country_codes() -> list:
+def get_all_country_codes() -> list[int]:
 	"""Get a sorted list of all unique country codes."""
 	return sorted(LOCAL_DIGIT_LIMITS_BY_CODE.keys())
 
 
-def get_countries_by_continent() -> Dict[str, Dict[str, str]]:
-	"""
-	Get the dictionary of all countries, grouped by continent.
-	DEPRECATED: Use get_countries_by_continent_and_subregion() for UN geoscheme structure.
+def get_countries_by_continent() -> dict[str, dict[str, str]]:
+	"""Return all countries grouped by continent (flattened, no subregions).
+
+	.. deprecated::
+		Use :func:`get_countries_by_continent_and_subregion` instead.
 
 	Returns:
-		A flattened dictionary for backward compatibility.
+		A dict mapping continent name to a ``{country_label: format_string}`` dict.
 	"""
-	# Flatten the structure for backward compatibility
+	warnings.warn(
+		"get_countries_by_continent() is deprecated. "
+		"Use get_countries_by_continent_and_subregion() instead.",
+		DeprecationWarning,
+		stacklevel=2,
+	)
 	flat_structure = {}
 	for continent, data in COUNTRIES_BY_CONTINENT.items():
 		if continent == 'Antarctica':
@@ -778,7 +806,7 @@ def get_countries_by_continent() -> Dict[str, Dict[str, str]]:
 	return flat_structure
 
 
-def search_countries(query: str) -> list:
+def search_countries(query: str) -> list[str]:
 	"""
 	Search for countries by name.
 
@@ -799,8 +827,14 @@ def search_countries(query: str) -> list:
 	return sorted(matches)
 
 
-def get_country_stats() -> Dict[str, Any]:
-	"""Get statistics about the phone format database."""
+def get_country_stats() -> dict[str, Any]:
+	"""Return summary statistics about the phone format database.
+
+	Returns:
+		A dict with keys: ``total_countries``, ``total_country_codes``,
+		``digit_limit_distribution``, ``continent_breakdown``, and
+		``coverage_percentage``.
+	"""
 	total_countries = len(ALL_COUNTRIES)
 	total_codes = len(set(LOCAL_DIGIT_LIMITS_BY_CODE.keys()))
 
@@ -828,9 +862,11 @@ def get_country_stats() -> Dict[str, Any]:
 	}
 
 
-# --- Main execution block for demonstrating and testing the module ---
+# ---------------------------------------------------------------------------
+# CLI — run directly to demo and test the module
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
-	print("📞 Phone Formats Module Demo (UN Geoscheme)")
+	print("Phone Formats — module demo")
 	print("=" * 50)
 
 	# 1. Test a specific country
@@ -853,20 +889,20 @@ if __name__ == "__main__":
 
 	# 3. Show database statistics
 	stats = get_country_stats()
-	print("📊 Database Stats (UN Geoscheme):")
+	print("Database stats (UN Geoscheme):")
 	print(f"  - Total Countries/Territories: {stats['total_countries']}")
 	print(f"  - Unique Country Codes: {stats['total_country_codes']}")
 	print(f"  - World Coverage: {stats['coverage_percentage']}%")
 
 	# 4. Show continent breakdown
-	print("\n🌍 Continent Breakdown:")
+	print("\nContinent breakdown:")
 	for continent, info in stats['continent_breakdown'].items():
 		subregion_text = f" ({info['subregions']} subregions)" if info['subregions'] > 0 else ""
 		print(f"  - {continent}: {info['total']} countries{subregion_text}")
 
 	# 5. Test subregion filtering
 	print("-" * 50)
-	print("🔍 Testing UN Subregion Filtering:")
+	print("Subregion filtering test:")
 
 	# Test Western Europe
 	western_europe = get_countries_by_continent_and_subregion('Europe', 'Western Europe')
@@ -890,7 +926,7 @@ if __name__ == "__main__":
 	# 7. Show continent structure
 	print("-" * 50)
 	structure = get_continent_structure()
-	print("🗺️  UN Geoscheme Structure:")
+	print("UN Geoscheme structure:")
 	for continent, subregions in structure.items():
 		if subregions and subregions != ['Antarctica']:
 			print(f"{continent}: {', '.join(subregions)}")
@@ -899,7 +935,7 @@ if __name__ == "__main__":
 
 	# 8. Test digit validation logic
 	print("-" * 50)
-	print("🧪 Testing Digit Validation Logic:")
+	print("Digit validation test:")
 
 	# Test US number validation (should be 10 LOCAL digits)
 	us_code = 1
@@ -911,22 +947,3 @@ if __name__ == "__main__":
 		is_valid = validate_digit_input(test_input, us_code)
 		formatted = format_display_number(test_input, us_code) if is_valid else "INVALID"
 		print(f"  Input '{test_input}' ({len(test_input)} digits): {is_valid} → {formatted}")
-
-# --- Export public components of the module ---
-__all__ = [
-	'COUNTRIES_BY_CONTINENT',
-	'ALL_COUNTRIES',
-	'LOCAL_DIGIT_LIMITS_BY_CODE',
-	'extract_country_code_from_label',
-	'get_digit_limit',
-	'format_display_number',
-	'validate_digit_input',
-	'get_country_list',
-	'get_format_example',
-	'get_all_country_codes',
-	'get_countries_by_continent',  # Deprecated but maintained for compatibility
-	'get_countries_by_continent_and_subregion',  # New UN geoscheme function
-	'get_continent_structure',
-	'search_countries',
-	'get_country_stats'
-]
