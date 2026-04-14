@@ -1,5 +1,79 @@
+"""
+dialogorithm.py — Dialogorithm GUI application.
+
+Provides a Tkinter-based interface for selecting a country, entering a
+local phone number, choosing a signature line, and generating a PNG image
+where each digit of the number is replaced by a PhD-level mathematical
+expression via ``latex_processor``.
+
+Run directly::
+
+    python dialogorithm.py
+"""
+
 import os
 import sys
+
+# Modules live in support_files/
+_HERE = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, os.path.join(_HERE, "support_files"))
+
+# --- Logging: off by default, user can enable via GUI checkbox ---
+import logging
+
+logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().addHandler(logging.NullHandler())
+
+_log_file_handler = None  # Created on first enable, reused on subsequent toggles
+
+
+class _ColorFormatter(logging.Formatter):
+	"""Compact colored formatter for terminal output."""
+	RESET = "\x1b[0m"
+	STYLES = {
+		logging.DEBUG: "\x1b[38;5;240m",  # dark gray
+		logging.INFO: "\x1b[97m",  # bright white
+		logging.WARNING: "\x1b[93m",  # yellow
+		logging.ERROR: "\x1b[91m",  # bright red
+		logging.CRITICAL: "\x1b[1;91m",  # bold bright red
+	}
+
+	def format(self, record):
+		color = self.STYLES.get(record.levelno, self.RESET)
+		time = self.formatTime(record, "%H:%M:%S")
+		level = f"{record.levelname:<8}"
+		return f"{color}{time}  {level}  {record.getMessage()}{self.RESET}"
+
+
+_console_handler = logging.StreamHandler(sys.stdout)
+_console_handler.setLevel(logging.DEBUG)
+_console_handler.setFormatter(_ColorFormatter())
+logging.getLogger().addHandler(_console_handler)
+
+
+def _toggle_logging(*_) -> None:
+	"""Attach or detach the file log handler based on the checkbox state."""
+	global _log_file_handler
+	root_logger = logging.getLogger()
+	if logging_var.get():
+		if _log_file_handler is None:
+			_log_file_handler = logging.FileHandler(
+				os.path.join(Path.home(), "Downloads", "dialogorithm.log"),
+				mode="a", encoding="utf-8"
+			)
+			_log_file_handler.setLevel(logging.DEBUG)
+			_log_file_handler.setFormatter(logging.Formatter(
+				fmt="%(asctime)s  %(name)-28s  %(levelname)-8s  %(funcName)s: %(message)s",
+				datefmt="%Y-%m-%d %H:%M:%S"
+			))
+		if _log_file_handler not in root_logger.handlers:
+			root_logger.addHandler(_log_file_handler)
+	else:
+		if _log_file_handler and _log_file_handler in root_logger.handlers:
+			root_logger.removeHandler(_log_file_handler)
+
+
+import threading
 import tkinter as tk
 from tkinter import messagebox, ttk
 import latex_processor
@@ -7,7 +81,6 @@ import logging
 import random
 from pathlib import Path
 import traceback
-import time
 
 # Suppress macOS GUI warnings
 if sys.platform == "darwin":  # macOS
@@ -23,116 +96,14 @@ from phone_formats import (
 	get_continent_structure
 )
 
-
 # --- SOPHISTICATED DEBUG SYSTEM ---
-class DebugTracker:
-	def __init__(self):
-		self.validation_calls = []
-		self.field_states = []
-		self.last_successful_input = ""
 
-	def log_validation(self, char, current_value, country_code, max_digits, result, field_content=None):
-		timestamp = time.time()
-		call_info = {
-			'timestamp': timestamp,
-			'char': char,
-			'current_value': current_value,
-			'current_length': len(current_value),
-			'country_code': country_code,
-			'max_digits': max_digits,
-			'result': result,
-			'field_content': field_content,
-			'field_length': len(field_content) if field_content else None,
-			'stack_trace': ''.join(traceback.format_stack()[-3:-1])  # Last 2 stack frames
-		}
-		self.validation_calls.append(call_info)
-
-		# Keep only last 20 calls to prevent memory issues
-		if len(self.validation_calls) > 20:
-			self.validation_calls = self.validation_calls[-20:]
-
-	def log_field_state(self, source, field_content, var_content):
-		timestamp = time.time()
-		state_info = {
-			'timestamp': timestamp,
-			'source': source,
-			'field_content': field_content,
-			'var_content': var_content,
-			'field_length': len(field_content),
-			'var_length': len(var_content),
-			'cursor_pos': None
-		}
-
-		try:
-			# Try to get cursor position
-			if hasattr(entry_local, 'index'):
-				state_info['cursor_pos'] = entry_local.index(tk.INSERT)
-		except:
-			pass
-
-		self.field_states.append(state_info)
-
-		# Keep only last 20 states
-		if len(self.field_states) > 20:
-			self.field_states = self.field_states[-20:]
-
-	def print_analysis(self):
-		print("\n" + "=" * 80)
-		print("🔍 COMPREHENSIVE DEBUG ANALYSIS")
-		print("=" * 80)
-
-		print(f"\n📊 VALIDATION CALLS ({len(self.validation_calls)} total):")
-		for i, call in enumerate(self.validation_calls[-5:]):  # Last 5 calls
-			print(
-				f"  [{i + 1}] Char: '{call['char']}' | Current: '{call['current_value']}' (len={call['current_length']})")
-			print(f"      Country: +{call['country_code']} | Max: {call['max_digits']} | Result: {call['result']}")
-			if call['field_content'] is not None:
-				print(f"      Field: '{call['field_content']}' (len={call['field_length']})")
-			print()
-
-		print(f"\n📋 FIELD STATES ({len(self.field_states)} total):")
-		for i, state in enumerate(self.field_states[-3:]):  # Last 3 states
-			print(f"  [{i + 1}] Source: {state['source']}")
-			print(f"      Field: '{state['field_content']}' (len={state['field_length']})")
-			print(f"      Var:   '{state['var_content']}' (len={state['var_length']})")
-			if state['cursor_pos'] is not None:
-				print(f"      Cursor: {state['cursor_pos']}")
-			print()
-
-		# Check for discrepancies
-		if self.validation_calls and self.field_states:
-			last_validation = self.validation_calls[-1]
-			last_state = self.field_states[-1]
-
-			print("🚨 DISCREPANCY ANALYSIS:")
-			if last_validation['current_value'] != last_state['field_content']:
-				print(
-					f"  ❌ MISMATCH: Validation sees '{last_validation['current_value']}' but field contains '{last_state['field_content']}'")
-			else:
-				print(f"  ✅ MATCH: Validation and field agree on content")
-
-			if last_state['field_content'] != last_state['var_content']:
-				print(
-					f"  ❌ VAR MISMATCH: Field shows '{last_state['field_content']}' but StringVar has '{last_state['var_content']}'")
-			else:
-				print(f"  ✅ VAR MATCH: Field and StringVar agree")
-
-		print("=" * 80)
-
-
-debug_tracker = DebugTracker()
-
-# --- Logger Setup ---
-logger = logging.getLogger("dialogorithm_gui")
-logger.setLevel(logging.DEBUG)
-handler = logging.FileHandler("dialogorithm_gui.log")
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+logger = logging.getLogger("dialogorithm")
 
 
 # --- Signature Line Generator ---
-def get_signature_line():
+def get_signature_line() -> str:
+	"""Return a random signature line for use above the phone number equations."""
 	options = [
 		"Please call me at:", "Contact me:", "Reach out via:", "Phone:", "Business line:",
 		"Available at:", "You can reach me at:", "My direct line:", "Telephone:", "Feel free to call:",
@@ -143,47 +114,15 @@ def get_signature_line():
 	return random.choice(options)
 
 
-def get_downloads_dir():
+def get_downloads_dir() -> Path:
+	"""Return the path to the current user's Downloads folder."""
 	home = Path.home()
 	return home / "Downloads"
 
 
-# --- Fixed Validation Function ---
-def validate_phone_input_fixed(char, current_value, country_code_text):
-	"""
-	FIXED: Validate phone input ensuring only LOCAL digits are counted (not country code)
-	"""
-	# Only allow digits
-	if not char.isdigit():
-		return False
-
-	# Extract country code from the label text (e.g., "+1" -> 1)
-	try:
-		if country_code_text == '+':
-			return len(current_value + char) <= 15  # Default fallback
-		country_code = int(country_code_text.replace('+', ''))
-	except (ValueError, AttributeError):
-		return len(current_value + char) <= 15  # Default fallback
-
-	# Get the maximum LOCAL digits allowed for this country
-	max_local_digits = get_digit_limit(country_code)
-
-	# Check if adding this character would exceed the limit
-	new_length = len(current_value + char)
-
-	# Debug when rejection happens
-	if new_length > max_local_digits:
-		print(
-			f"VALIDATION REJECT: trying to add '{char}' to '{current_value}' (len={len(current_value)}) would make {new_length} > {max_local_digits}")
-	else:
-		print(
-			f"VALIDATION ACCEPT: adding '{char}' to '{current_value}' (len={len(current_value)}) makes {new_length} <= {max_local_digits}")
-
-	return new_length <= max_local_digits
-
-
 # --- GUI Logic ---
-def on_continent_select(event):
+def on_continent_select(_event) -> None:
+	"""Populate the subregion dropdown when a continent is chosen."""
 	continent = continent_var.get()
 	subregion_combo['values'] = []
 	country_combo['values'] = []
@@ -205,7 +144,8 @@ def on_continent_select(event):
 		subregion_combo['values'] = subregions
 
 
-def on_subregion_select(event):
+def on_subregion_select(_event) -> None:
+	"""Populate the country dropdown when a subregion is chosen."""
 	continent = continent_var.get()
 	subregion = subregion_var.get()
 	country_var.set("")
@@ -219,7 +159,8 @@ def on_subregion_select(event):
 	country_combo['values'] = countries
 
 
-def on_country_select(event):
+def on_country_select(_event) -> None:
+	"""Update the country code label and enable the phone entry when a country is chosen."""
 	country = country_var.get()
 	if not country:
 		return
@@ -238,7 +179,7 @@ def on_country_select(event):
 
 		# Show the digit limit for this country
 		limit = get_digit_limit(code)
-		print(f"Selected {country}: +{code} allows {limit} LOCAL digits")
+		logger.debug(f"Selected {country}: +{code}, max {limit} local digits")
 	else:
 		country_code_label.config(text="+")
 		local_number_var.set("")
@@ -247,6 +188,13 @@ def on_country_select(event):
 
 
 def create_validation():
+	"""Return a Tkinter validation callback that enforces per-country digit limits.
+
+	The inner function reads the actual field content directly (rather than
+	relying on Tkinter's ``%P`` proposed-value parameter, which can be
+	unreliable) and rejects any character that would push the digit count
+	above the country's local maximum.
+	"""
 	"""Create validation function that uses ACTUAL field content instead of Tkinter's misleading parameter"""
 
 	def validate(char, proposed_value):
@@ -256,7 +204,7 @@ def create_validation():
 
 			# Only allow digits
 			if not char.isdigit():
-				print(f"🚫 REJECT: Non-digit character '{char}'")
+				logger.debug(f"Validation REJECT: non-digit '{char}'")
 				return False
 
 			# Get country code from label
@@ -270,28 +218,24 @@ def create_validation():
 				new_length = len(actual_current + char)  # Use ACTUAL current content
 				will_accept = new_length <= max_digits
 
-				print(f"\n🔍 FIXED VALIDATION:")
-				print(f"  📝 Adding: '{char}'")
-				print(f"  📱 ACTUAL current: '{actual_current}' (len={len(actual_current)})")
-				print(f"  🗑️  Ignoring Tkinter param: '{proposed_value}' (misleading)")
-				print(f"  🌍 Country: +{country_code} (max {max_digits} LOCAL digits)")
-				print(f"  📏 REAL new length: {new_length}")
-				print(f"  🎯 Decision: {'✅ ACCEPT' if will_accept else '❌ REJECT'}")
-
+				decision = "ACCEPT" if will_accept else "REJECT"
+				logger.debug(
+					f"Validation {decision}: '{char}' → '{actual_current + char}' ({new_length}/{max_digits}) +{country_code}")
 				return will_accept
 
-			except Exception as e:
-				print(f"⚠️  Error parsing country code: {e}")
+			except Exception as parse_err:
+				logger.error(f"Validation parse error: {parse_err}")
 				return len(actual_current + char) <= 15
 
-		except Exception as e:
-			print(f"💥 VALIDATION ERROR: {e}")
+		except Exception as validation_err:
+			logger.error(f"Validation error: {validation_err}")
 			return False
 
 	return validate
 
 
-def on_number_change(*args):
+def on_number_change(*_) -> None:
+	"""Format and display the phone number as the user types."""
 	"""Simplified number change handler"""
 	try:
 		country = country_var.get()
@@ -316,22 +260,23 @@ def on_number_change(*args):
 			# Show progress
 			current_length = len(clean_number)
 			max_length = get_digit_limit(code)
-			print(f"📱 {current_length}/{max_length} digits: '{clean_number}' → '{formatted}'")
+			logger.debug(f"Input: {current_length}/{max_length} digits  '{clean_number}' → '{formatted}'")
 
 			# Ensure field shows the end
 			try:
 				entry_local.icursor(tk.END)
 				entry_local.xview_moveto(1.0)
-			except:
+			except Exception:
 				pass
 		else:
 			formatted_display.config(text="")
 
-	except Exception as e:
-		print(f"💥 NUMBER CHANGE ERROR: {e}")
+	except Exception as err:
+		logger.error(f"Number change error: {err}")
 
 
-def on_generate():
+def on_generate() -> None:
+	"""Validate input and kick off background LaTeX generation."""
 	country = country_var.get()
 	if not country:
 		messagebox.showwarning("Input Error", "Please select a country first.")
@@ -347,14 +292,12 @@ def on_generate():
 		messagebox.showwarning("Input Error", "Please select a country and enter a phone number.")
 		return
 
-	# Use our robust phone_formats.py validation instead of phonenumbers library
 	max_digits = get_digit_limit(code)
 	if len(local_part) > max_digits:
 		messagebox.showwarning("Input Error",
 		                       f"Phone number too long. {country} allows maximum {max_digits} local digits.")
 		return
 
-	# Format the number using our system
 	formatted_local = format_display_number(local_part, code)
 	full_international = f"+{code} {formatted_local}"
 
@@ -366,16 +309,52 @@ def on_generate():
 	else:
 		signature_text = signature_option
 
+	# Lock the UI and kick off background generation
+	generate_button.config(state='disabled', text="⏳ Generating...")
+	status_label.config(text="Compiling LaTeX — this takes a few seconds...", fg="#886600")
+	root.update_idletasks()
+
+	logger.info(f"Generating LaTeX for {full_international} with signature: {signature_text}")
+	thread = threading.Thread(
+		target=_generation_worker,
+		args=(full_international, signature_text),
+		daemon=True
+	)
+	thread.start()
+
+
+def _generation_worker(full_international: str, signature_text: str) -> None:
+	"""Run LaTeX generation in a background thread.
+
+	Uses ``root.after`` to push GUI updates back to the main thread on
+	completion or failure.
+	"""
+	"""Runs in a background thread. Uses root.after to push GUI updates back to the main thread."""
 	try:
-		logger.info(f"Generating LaTeX for {full_international} with signature: {signature_text}")
 		output_path = latex_processor.generate_latex_for_number(full_international, signature_text)
-		messagebox.showinfo("Success", f"LaTeX image saved to:\n{output_path}")
-	except Exception as e:
-		logger.exception("Failed to generate image")
-		messagebox.showerror("Error", f"Failed to generate image:\n{e}")
+		root.after(0, _on_generation_success, output_path)
+	except Exception as err:
+		logger.exception("Generation failed")
+		root.after(0, _on_generation_error, str(e))
 
 
-def on_signature_change(*args):
+def _on_generation_success(output_path: str) -> None:
+	"""Re-enable the generate button and show the success status."""
+	"""Called on the main thread after successful generation."""
+	generate_button.config(state='normal', text="🎯 Generate LaTeX Image")
+	status_label.config(text=f"✅ Saved to: {output_path}", fg="#006600")
+
+
+def _on_generation_error(error_msg: str) -> None:
+	"""Re-enable the generate button and report the error to the user."""
+	"""Called on the main thread after a generation failure."""
+	generate_button.config(state='normal', text="🎯 Generate LaTeX Image")
+	status_label.config(text=f"❌ Generation failed — check the log for details.", fg="#cc0000")
+	messagebox.showerror("Error", f"Failed to generate image:\n{error_msg}")
+
+
+def on_signature_change(*_) -> None:
+	"""Enable or disable the custom signature entry based on the dropdown value."""
 	try:
 		if signature_var.get() == "Custom":
 			custom_signature_entry.config(state='normal')
@@ -389,7 +368,8 @@ def on_signature_change(*args):
 
 # --- GUI Setup ---
 root = tk.Tk()
-root.geometry("700x520")
+root.geometry("700x820")
+root.resizable(True, True)
 root.title("📞 Dialogorithm: LaTeX Phone Generator (UN Geoscheme)")
 
 # --- CONTINENT ---
@@ -433,7 +413,7 @@ country_code_label = tk.Label(phone_input_frame, text="+", font=("Arial", 12), w
 country_code_label.grid(row=1, column=0, sticky="e", padx=(0, 2))
 
 local_number_var = tk.StringVar()
-local_number_var.trace('w', on_number_change)
+local_number_var.trace_add('write', on_number_change)
 
 # FIXED: Use entry field wide enough for longest possible phone numbers
 # Longest numbers can be up to 15 digits + country code display + formatting
@@ -468,28 +448,35 @@ custom_signature_var = tk.StringVar()
 custom_signature_entry = tk.Entry(custom_signature_frame, textvariable=custom_signature_var, font=("Arial", 11),
                                   width=40, state='disabled')
 custom_signature_entry.pack()
-signature_var.trace('w', on_signature_change)
+signature_var.trace_add('write', on_signature_change)
+
+# --- LOGGING TOGGLE ---
+logging_var = tk.BooleanVar(value=False)
+logging_check = ttk.Checkbutton(root, text="Enable logging to file (Downloads/dialogorithm.log)",
+                                variable=logging_var, command=_toggle_logging)
+logging_check.pack(pady=(10, 0))
 
 # --- GENERATE BUTTON ---
 button_frame = tk.Frame(root)
-button_frame.pack(pady=(20, 20))
+button_frame.pack(pady=(20, 5))
 generate_button = tk.Button(button_frame, text="🎯 Generate LaTeX Image", command=on_generate,
                             font=("Arial", 14, "bold"), width=25, height=2)
 generate_button.pack()
 
-# --- DEBUG: Print initial state ---
-print("=== Dialogorithm Started ===")
-print("🔧 Sophisticated debugging enabled")
-print("📞 Phone number validation system ready")
+# --- STATUS LABEL ---
+status_label = tk.Label(root, text="Ready.", font=("Arial", 10), fg="gray", wraplength=650)
+status_label.pack(pady=(0, 15))
 
-# Test phone_formats.py integration
+# --- DEBUG: Print initial state ---
+logger.info("=== Dialogorithm started ===")
+logger.info("Phone number validation system ready")
+
 try:
 	test_limit = get_digit_limit(1)
 	test_format = format_display_number("5551234567", 1)
-	print(f"✅ phone_formats.py integration test passed")
-	print(f"   US limit: {test_limit}, Format test: '{test_format}'")
-except Exception as e:
-	print(f"❌ phone_formats.py integration test FAILED: {e}")
+	logger.info(f"phone_formats integration OK — US limit: {test_limit}, sample: '{test_format}'")
+except Exception as err:
+	logger.error(f"phone_formats integration FAILED: {err}")
 	traceback.print_exc()
 
 root.mainloop()
