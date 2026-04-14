@@ -105,7 +105,7 @@ def _get_1_templates() -> list:
 		r"\left( \operatorname{rank}(\operatorname{K}_0(\operatorname{Spec}(\mathbb{Z}))) \right)",
 		rf"\left( \frac{{\det(e^{{{A_sym}}})}}{{e^{{\operatorname{{Tr}}({A_sym})}}}} \right)",
 		r"\left( \operatorname{rank}(\mathfrak{su}(2)) \right)",
-		r"\left( \chi_V(e) / \operatorname{dim}(V) \right)",
+		r"\left( \frac{\chi_V(e)}{\operatorname{dim}(V)} \right)",
 		r"\left( |Z(S_3)| \right)",
 
 		# --- Algebraic Geometry & Topology ---
@@ -116,7 +116,7 @@ def _get_1_templates() -> list:
 		r"\left( \operatorname{dim}(H^0(\mathbb{P}^1, \mathcal{O}(0))) \right)",
 		r"\left( \operatorname{genus}(\mathbb{P}^1) + 1 \right)",
 		r"\left( \deg(\mathbb{P}^0) \right)",
-		r"\left( \frac{(d-1)(d-2)}{2}|_{d=3} \right)",
+		r"\left( h(-3) \right)",
 		r"\left( \operatorname{lk}(L2a1) \right)",
 		r"\left( b_0(\mathbb{T}^n) \right)",
 
@@ -142,7 +142,7 @@ def _get_2_templates() -> list:
 	templates = [
 		# --- Lie Theory & Representation Theory ---
 		r"\left( \operatorname{rank}(\mathfrak{sl}_3(\mathbb{C})) \right)",
-		r"\left( \operatorname{dim} H^1(S_3, \mathbb{C}^*) \right)",
+		r"\left( \operatorname{dim}(H^1(S_3, \mathbb{C}^*)) \right)",
 		r"\left( \operatorname{dim}(\mathfrak{u}(1)) \cdot 2 \right)",
 		r"\left( \operatorname{dim}(\mathfrak{so}(3)) - 1 \right)",
 		r"\left( \operatorname{rank}(\mathfrak{so}(4)) \right)",
@@ -309,7 +309,7 @@ def _get_6_templates() -> list:
 
 		# --- Algebraic Geometry & Topology ---
 		r"\left( \operatorname{dim}(\operatorname{Symp}^6(\mathbb{C}^2)) - 1 \right)",
-		r"\left( e_0(Q, R)|_{R=k[x], Q=(x^6)} \right)",
+		r"\left( \phi(7) \right)",
 		r"\left( -2 \deg(K_{\mathbb{P}^2}) \right)",
 		r"\left( b_1(\mathbb{T}^2) \cdot 3 \right)",
 		r"\left( h^{2,0}(\text{K3 surface}) + 5 \right)",
@@ -347,7 +347,7 @@ def _get_7_templates() -> list:
 		r"\left( \operatorname{dim}(\mathfrak{sp}(4,\mathbb{C})) - 3 \right)",
 
 		# --- Algebraic Geometry & Topology ---
-		r"\left( \operatorname{mult}_0(\mathbb{C}[x_1..x_7]/(x_1..x_7)) \right)",
+		r"\left( \operatorname{mult}_0(\mathbb{C}[x_1, \ldots, x_7]/(x_1 \cdots x_7)) \right)",
 		r"\left( \operatorname{dim}(\operatorname{Symp}^7(\mathbb{C}^2)) - 1 \right)",
 		r"\left( \tau(2^6) \right)",
 		r"\left( b_1(\mathbb{T}^7) \right)",
