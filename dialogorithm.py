@@ -461,7 +461,7 @@ button_frame = tk.Frame(root)
 button_frame.pack(pady=(20, 5))
 generate_button = tk.Button(button_frame, text="🎯 Generate LaTeX Image", command=on_generate,
                             font=("Arial", 14, "bold"), width=25, height=2)
-generate_button.pack()
+generate_button.pz1ack()
 
 # --- STATUS LABEL ---
 status_label = tk.Label(root, text="Ready.", font=("Arial", 10), fg="gray", wraplength=650)
