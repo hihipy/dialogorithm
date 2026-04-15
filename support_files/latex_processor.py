@@ -46,7 +46,7 @@ def log_verification(full_number_str: str, latex_parts: list, signature_text: st
 	"""Log a verification table mapping each LaTeX expression to its expected digit.
 
 	Args:
-		full_number_str: The full international phone number string (e.g. '+1 (555) 867-5309').
+		full_number_str: The full international phone number string (e.g. '+1 (202) 285-1684').
 		latex_parts: Ordered list of LaTeX fragments produced by the generator.
 		signature_text: The signature line used in the document.
 	"""
@@ -108,6 +108,57 @@ def _get_unique_latex_for_digit(digit_char: str, used_formulas: Set[str]) -> str
 
 # CRITICAL FIX 1: Replace the generate_latex_for_number function in latex_processor.py
 
+import re as _re
+
+
+def _structure_main_number(main_number: str, used_formulas: set) -> list:
+	"""Return latex_parts with visual structure applied to *main_number*.
+
+	Applies bold parentheses and em-dash separators based on digit count,
+	covering the most common international phone number lengths (6–11 digits).
+
+	Args:
+		main_number: Local phone digits only (no country code).
+		used_formulas: Set of already-used LaTeX templates (mutated in place).
+
+	Returns:
+		Ordered list of LaTeX fragment strings.
+	"""
+
+	def digits_to_parts(s: str) -> list:
+		return [_get_unique_latex_for_digit(d, used_formulas) for d in s]
+
+	n = len(main_number)
+	parts = []
+
+	if n == 10:
+		# (XXX) XXX—XXXX  — North American and 10-digit international
+		parts += [r"\boldsymbol{(}"] + digits_to_parts(main_number[:3]) + [r"\boldsymbol{)}", r"\;"]
+		parts += digits_to_parts(main_number[3:6]) + [r"\text{---}"] + digits_to_parts(main_number[6:])
+	elif n == 11:
+		# (XXXX) XXX—XXXX
+		parts += [r"\boldsymbol{(}"] + digits_to_parts(main_number[:4]) + [r"\boldsymbol{)}", r"\;"]
+		parts += digits_to_parts(main_number[4:7]) + [r"\text{---}"] + digits_to_parts(main_number[7:])
+	elif n == 9:
+		# (XXX) XX—XXXX
+		parts += [r"\boldsymbol{(}"] + digits_to_parts(main_number[:3]) + [r"\boldsymbol{)}", r"\;"]
+		parts += digits_to_parts(main_number[3:5]) + [r"\text{---}"] + digits_to_parts(main_number[5:])
+	elif n == 8:
+		# XXXX—XXXX
+		parts += digits_to_parts(main_number[:4]) + [r"\text{---}"] + digits_to_parts(main_number[4:])
+	elif n == 7:
+		# XXX—XXXX
+		parts += digits_to_parts(main_number[:3]) + [r"\text{---}"] + digits_to_parts(main_number[3:])
+	elif n == 6:
+		# XXX—XXX
+		parts += digits_to_parts(main_number[:3]) + [r"\text{---}"] + digits_to_parts(main_number[3:])
+	else:
+		# Fallback: flat sequence for unusual lengths
+		parts += digits_to_parts(main_number)
+
+	return parts
+
+
 @log_function_entry_exit
 def generate_latex_for_number(
 		full_number_str: str,
@@ -120,7 +171,7 @@ def generate_latex_for_number(
 		signature_text: Header line displayed above the equations.
 
 	Returns:
-		Absolute path to the generated PNG file in ~/Downloads.
+		Absolute path to the generated PNG file in a temp directory.
 
 	Raises:
 		ValueError: If *full_number_str* contains no digits.
@@ -135,11 +186,16 @@ def generate_latex_for_number(
 	if not clean_number:
 		raise ValueError("Phone number must contain at least one digit")
 
-	country_code, main_number = "", clean_number
-	if has_plus and len(clean_number) == 11 and clean_number.startswith('1'):
-		country_code, main_number = '1', clean_number[1:]
-	elif has_plus and len(clean_number) > 10:
-		country_code, main_number = clean_number[:-10], clean_number[-10:]
+	# Parse country code directly from the +XX prefix so we never assume
+	# a fixed local-number length (the old logic assumed 10 digits for all
+	# non-US international numbers, which broke 9-digit countries like Spain).
+	country_code = ""
+	main_number = clean_number
+	if has_plus:
+		m = _re.match(r'\+(\d+)', full_number_str.strip())
+		if m:
+			country_code = m.group(1)
+			main_number = clean_number[len(country_code):]
 
 	used_formulas = set()
 	latex_parts = []
@@ -151,17 +207,7 @@ def generate_latex_for_number(
 			latex_parts.append(_get_unique_latex_for_digit(digit, used_formulas))
 		latex_parts.append(r"\quad")
 
-	if len(main_number) == 10:
-		area, exch, line = main_number[:3], main_number[3:6], main_number[6:]
-		latex_parts.append(r"\boldsymbol{(}")
-		latex_parts.extend([_get_unique_latex_for_digit(d, used_formulas) for d in area])
-		latex_parts.append(r"\boldsymbol{)}")
-		latex_parts.append(r"\;")
-		latex_parts.extend([_get_unique_latex_for_digit(d, used_formulas) for d in exch])
-		latex_parts.append(r"\text{---}")
-		latex_parts.extend([_get_unique_latex_for_digit(d, used_formulas) for d in line])
-	else:
-		latex_parts.extend([_get_unique_latex_for_digit(d, used_formulas) for d in main_number])
+	latex_parts.extend(_structure_main_number(main_number, used_formulas))
 
 	math_line = format_equation_single_line(latex_parts)
 
