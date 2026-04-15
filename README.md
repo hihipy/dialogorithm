@@ -65,6 +65,36 @@ temp file — nothing stays on your computer.
 
 ---
 
+## How many unique outputs are possible?
+
+Each digit is drawn from a pool of 22–25 verified mathematical expressions.
+No expression repeats within a single number. Every time you generate the same
+number you will almost certainly get a completely different image.
+
+The number of possible outputs scales with total digit count — longer numbers
+(more digits in the country code + local number) produce astronomically more
+combinations.
+
+**Examples by country:**
+
+| Country | Number | Unique outputs |
+|---|---|---|
+| 🇺🇸 US | +1 (555) 867-5309 | ~1.16 quadrillion |
+| 🇫🇷 France | +33 6 12 34 56 78 | ~1.45 quadrillion |
+| 🇪🇸 Spain | +34 612 345 678 | ~1.51 quadrillion |
+| 🇦🇺 Australia | +61 412 345 678 | ~1.32 quadrillion |
+| 🇿🇦 South Africa | +27 82 123 4567 | ~31.9 quadrillion |
+| 🇬🇧 UK | +44 7700 900123 | ~25.2 quadrillion |
+| 🇯🇵 Japan | +81 90 1234 5678 | ~31.7 quadrillion |
+| 🇮🇳 India | +91 98765 43210 | ~33.1 quadrillion |
+| 🇧🇷 Brazil | +55 11 91234-5678 | ~606 quadrillion |
+| 🇩🇪 Germany | +49 151 2345 6789 | ~793 quadrillion |
+
+Germany and Brazil top the list simply because their numbers have more total
+digits — each additional digit multiplies the combinations by another 20–25.
+
+---
+
 ## Getting started
 
 ```bash
