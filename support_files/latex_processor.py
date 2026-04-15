@@ -46,7 +46,7 @@ def log_verification(full_number_str: str, latex_parts: list, signature_text: st
 	"""Log a verification table mapping each LaTeX expression to its expected digit.
 
 	Args:
-		full_number_str: The full international phone number string (e.g. '+1 (202) 285-1684').
+		full_number_str: The full international phone number string (e.g. '+1 (555) 867-5309').
 		latex_parts: Ordered list of LaTeX fragments produced by the generator.
 		signature_text: The signature line used in the document.
 	"""
@@ -116,7 +116,7 @@ def generate_latex_for_number(
 	"""Build a LaTeX document for *full_number_str* and render it to PNG.
 
 	Args:
-		full_number_str: International phone number (e.g. '+1 (202) 285-1684').
+		full_number_str: International phone number (e.g. '+1 (555) 867-5309').
 		signature_text: Header line displayed above the equations.
 
 	Returns:
@@ -187,18 +187,18 @@ def generate_latex_for_number(
 		"\\end{document}"
 	])
 
-	output_dir = os.path.join(str(Path.home()), "Downloads")
-	os.makedirs(output_dir, exist_ok=True)
+	output_dir = tempfile.mkdtemp(prefix="dialogorithm_")
+	logger.debug("Using temp output dir: %s", output_dir)
 
 	# Log verification data
 	log_verification(full_number_str=full_number_str, latex_parts=latex_parts, signature_text=signature_text)
 
 	# Render PNG from LaTeX
-	image_path, msg = render_latex_to_png(latex_doc.strip(), output_dir=output_dir, dpi=150)
+	image_path, msg = render_latex_to_png(latex_doc.strip(), output_dir=output_dir, dpi=250)
 	if not image_path:
 		raise RuntimeError(msg)
 
-	logger.info(f"Image saved: {image_path}")
+	logger.info("Image rendered: %s", image_path)
 	return image_path
 
 
@@ -225,6 +225,7 @@ def render_latex_to_png(
 	Args:
 		latex_doc_str: Complete LaTeX document source.
 		output_dir: Directory where the final PNG will be saved.
+			Callers are responsible for creating this directory.
 		dpi: Resolution for the PNG output.
 
 	Returns:

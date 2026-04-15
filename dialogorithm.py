@@ -12,6 +12,7 @@ Run directly::
 """
 
 import os
+import shutil
 import sys
 
 # Modules live in support_files/
@@ -93,7 +94,8 @@ from phone_formats import (
 	format_display_number,
 	validate_digit_input,
 	get_countries_by_continent_and_subregion,
-	get_continent_structure
+	get_continent_structure,
+	get_special_prefixes,
 )
 
 # --- SOPHISTICATED DEBUG SYSTEM ---
@@ -160,7 +162,7 @@ def on_subregion_select(_event) -> None:
 
 
 def on_country_select(_event) -> None:
-	"""Update the country code label and enable the phone entry when a country is chosen."""
+	"""Update the country code label, enable the phone entry, and populate number type options."""
 	country = country_var.get()
 	if not country:
 		return
@@ -177,14 +179,30 @@ def on_country_select(_event) -> None:
 		entry_local.focus_set()
 		formatted_display.config(text="")
 
-		# Show the digit limit for this country
+		# Populate number type dropdown if special prefixes exist
+		prefixes = get_special_prefixes(code)
+		if prefixes:
+			type_options = ["Standard (no prefix)"] + list(prefixes.keys())
+			number_type_combo.config(state='readonly')
+			number_type_combo['values'] = type_options
+			number_type_var.set("Standard (no prefix)")
+			number_type_frame.pack(pady=(5, 0))
+		else:
+			number_type_var.set("")
+			number_type_combo['values'] = []
+			number_type_combo.config(state='disabled')
+			number_type_frame.pack_forget()
+
 		limit = get_digit_limit(code)
-		logger.debug(f"Selected {country}: +{code}, max {limit} local digits")
+		logger.debug("Selected %s: +%s, max %d local digits", country, code, limit)
 	else:
 		country_code_label.config(text="+")
 		local_number_var.set("")
 		entry_local.config(state='disabled')
 		formatted_display.config(text="")
+		number_type_var.set("")
+		number_type_combo['values'] = []
+		number_type_frame.pack_forget()
 
 
 def create_validation():
@@ -199,12 +217,15 @@ def create_validation():
 
 	def validate(char, proposed_value):
 		try:
-			# CRITICAL FIX: Use actual field content instead of Tkinter's parameter
+			# Empty char means a deletion (backspace/delete) — always allow
+			if not char:
+				return True
+
 			actual_current = entry_local.get() if 'entry_local' in globals() else ""
 
-			# Only allow digits
+			# Only allow digits for insertions
 			if not char.isdigit():
-				logger.debug(f"Validation REJECT: non-digit '{char}'")
+				logger.debug("Validation REJECT: non-digit '%s'", char)
 				return False
 
 			# Get country code from label
@@ -236,7 +257,6 @@ def create_validation():
 
 def on_number_change(*_) -> None:
 	"""Format and display the phone number as the user types."""
-	"""Simplified number change handler"""
 	try:
 		country = country_var.get()
 		if not country:
@@ -245,24 +265,22 @@ def on_number_change(*_) -> None:
 		code, region = extract_country_code_from_label(country)
 		raw_number = local_number_var.get()
 
-		# Clean the raw number to only digits
 		clean_number = "".join(filter(str.isdigit, raw_number))
 
-		# If the cleaned number is different from raw, update it
 		if clean_number != raw_number:
 			local_number_var.set(clean_number)
 			return
 
 		if code and clean_number:
-			formatted = format_display_number(clean_number, code)
+			format_template = ALL_COUNTRIES.get(country, "")
+			formatted = format_display_number(clean_number, code, format_template)
 			formatted_display.config(text=f"+{code} {formatted}")
 
-			# Show progress
 			current_length = len(clean_number)
 			max_length = get_digit_limit(code)
-			logger.debug(f"Input: {current_length}/{max_length} digits  '{clean_number}' → '{formatted}'")
+			logger.debug("Input: %d/%d digits  '%s' → '%s'",
+			             current_length, max_length, clean_number, formatted)
 
-			# Ensure field shows the end
 			try:
 				entry_local.icursor(tk.END)
 				entry_local.xview_moveto(1.0)
@@ -272,7 +290,200 @@ def on_number_change(*_) -> None:
 			formatted_display.config(text="")
 
 	except Exception as err:
-		logger.error(f"Number change error: {err}")
+		logger.error("Number change error: %s", err)
+
+
+def on_number_type_select(_event) -> None:
+	"""Pre-fill the phone entry with the selected number type prefix."""
+	country = country_var.get()
+	if not country:
+		return
+	code, _ = extract_country_code_from_label(country)
+	if not code:
+		return
+
+	selected_type = number_type_var.get()
+	if selected_type == "Standard (no prefix)" or not selected_type:
+		local_number_var.set("")
+		entry_local.focus_set()
+		return
+
+	prefixes = get_special_prefixes(code)
+	prefix_list = prefixes.get(selected_type, [])
+	if prefix_list:
+		# Pre-fill with the first (most common) prefix for this type
+		local_number_var.set(prefix_list[0])
+		entry_local.icursor(tk.END)
+		entry_local.focus_set()
+		logger.debug("Pre-filled prefix '%s' for type '%s'", prefix_list[0], selected_type)
+
+
+def clear_number() -> None:
+	"""Clear the phone entry field and reset the number type selector."""
+	local_number_var.set("")
+	number_type_var.set("Standard (no prefix)")
+	formatted_display.config(text="")
+	entry_local.focus_set()
+
+
+def on_paste(event) -> str:
+	"""Intercept paste events and strip non-digit characters before inserting.
+
+	Handles any clipboard format: (786) 212-6394, 786-212-6394,
+	+1 786 212 6394, etc.  Only the digit characters are inserted.
+	"""
+	try:
+		raw = root.clipboard_get()
+		digits_only = "".join(filter(str.isdigit, raw))
+		if digits_only:
+			entry_local.delete(0, tk.END)
+			entry_local.insert(0, digits_only)
+			logger.debug("Paste cleaned: '%s' → '%s'", raw[:40], digits_only)
+	except Exception as err:
+		logger.error("Paste handler error: %s", err)
+	return "break"  # prevent Tkinter's default paste from also firing
+
+
+def open_preview_popout(temp_path: str) -> None:
+	"""Open a popout window showing the generated image with Save / Discard options.
+
+	Includes a filename entry field and optional Browse button to change the
+	save location.  The preview is shown at the image's native resolution,
+	scrollable if wider than the screen.
+
+	Args:
+		temp_path: Path to the PNG in the system temp directory.
+	"""
+	from PIL import Image, ImageTk
+	import tkinter.filedialog as filedialog
+
+	popout = tk.Toplevel(root)
+	popout.title("Dialogorithm — Preview")
+	popout.resizable(True, True)
+	popout.configure(bg="#1e1e2e")
+	popout.grab_set()
+
+	# ── Image — full native resolution, horizontal scroll if wider than screen ─
+	try:
+		img = Image.open(temp_path)
+		w, h = img.size
+
+		screen_w = root.winfo_screenwidth() - 80
+		canvas_w = min(w, screen_w)
+
+		canvas_frame = tk.Frame(popout, bg="#1e1e2e")
+		canvas_frame.pack(fill="both", expand=True, padx=15, pady=(15, 5))
+
+		canvas = tk.Canvas(canvas_frame, width=canvas_w, height=h + 4,
+		                   bg="white", highlightthickness=0)
+		scrollbar = ttk.Scrollbar(canvas_frame, orient="horizontal",
+		                          command=canvas.xview)
+		canvas.configure(xscrollcommand=scrollbar.set)
+
+		photo = ImageTk.PhotoImage(img)
+		canvas.create_image(0, 0, anchor="nw", image=photo)
+		canvas.image = photo
+		canvas.configure(scrollregion=(0, 0, w, h))
+		canvas.pack(side="top")
+		if w > screen_w:
+			scrollbar.pack(side="top", fill="x")
+
+	except Exception as err:
+		tk.Label(popout, text=f"Could not load preview:\n{err}",
+		         font=("Arial", 11), fg="#ff6b6b", bg="#1e1e2e",
+		         padx=20, pady=20).pack()
+
+	# ── Filename + save location ──────────────────────────────────────────────
+	save_frame = tk.Frame(popout, bg="#1e1e2e", pady=8)
+	save_frame.pack(fill="x", padx=15)
+
+	tk.Label(save_frame, text="Filename:", font=("Arial", 11),
+	         fg="#cdd6f4", bg="#1e1e2e").grid(row=0, column=0, sticky="e", padx=(0, 6))
+
+	filename_var = tk.StringVar(value="Dialogorithm_Contact")
+	filename_entry = tk.Entry(save_frame, textvariable=filename_var,
+	                          font=("Arial", 11), width=28)
+	filename_entry.grid(row=0, column=1, sticky="w")
+
+	tk.Label(save_frame, text=".png", font=("Arial", 11),
+	         fg="#a6adc8", bg="#1e1e2e").grid(row=0, column=2, sticky="w", padx=(2, 16))
+
+	save_dir_var = tk.StringVar(value=str(Path.home() / "Downloads"))
+
+	tk.Label(save_frame, text="Save to:", font=("Arial", 11),
+	         fg="#cdd6f4", bg="#1e1e2e").grid(row=1, column=0, sticky="e", padx=(0, 6), pady=(6, 0))
+
+	dir_label = tk.Label(save_frame, textvariable=save_dir_var,
+	                     font=("Arial", 10), fg="#89b4fa", bg="#1e1e2e",
+	                     anchor="w", width=32)
+	dir_label.grid(row=1, column=1, sticky="w", pady=(6, 0))
+
+	def browse_dir():
+		chosen = filedialog.askdirectory(initialdir=save_dir_var.get(),
+		                                 title="Choose save folder")
+		if chosen:
+			save_dir_var.set(chosen)
+
+	tk.Button(save_frame, text="Browse…", command=browse_dir,
+	          font=("Arial", 10, "bold"),
+	          highlightbackground="#89b4fa", highlightthickness=2,
+	          cursor="hand2").grid(row=1, column=2, sticky="w",
+	                               padx=(2, 0), pady=(6, 0))
+
+	# ── Action buttons ────────────────────────────────────────────────────────
+	btn_frame = tk.Frame(popout, bg="#1e1e2e", pady=14)
+	btn_frame.pack()
+
+	def save_and_close():
+		"""Copy the temp PNG to the chosen location and close the popout."""
+		raw_name = filename_var.get().strip() or "Dialogorithm_Contact"
+		fname = raw_name if raw_name.lower().endswith(".png") else raw_name + ".png"
+		dest = os.path.join(save_dir_var.get(), fname)
+		try:
+			shutil.copy(temp_path, dest)
+			_cleanup_temp(temp_path)
+			status_label.config(text=f"✅  Saved: {dest}", fg="#a6e3a1")
+			logger.info("Saved: %s", dest)
+		except Exception as err:
+			messagebox.showerror("Save failed", str(err))
+			logger.error("Save failed: %s", err)
+			return
+		popout.destroy()
+
+	def discard_and_close():
+		"""Delete the temp PNG and close without saving."""
+		_cleanup_temp(temp_path)
+		status_label.config(text="Discarded — nothing saved.", fg="#a6adc8")
+		logger.debug("Preview discarded.")
+		popout.destroy()
+
+	tk.Button(
+		btn_frame, text="Save", command=save_and_close,
+		font=("Arial", 13, "bold"), width=14, height=2,
+		highlightbackground="#2ecc71", highlightthickness=3,
+		cursor="hand2",
+	).grid(row=0, column=0, padx=14)
+
+	tk.Button(
+		btn_frame, text="Discard", command=discard_and_close,
+		font=("Arial", 13, "bold"), width=14, height=2,
+		highlightbackground="#e74c3c", highlightthickness=3,
+		cursor="hand2",
+	).grid(row=0, column=1, padx=14)
+
+	popout.protocol("WM_DELETE_WINDOW", discard_and_close)
+
+
+def _cleanup_temp(path: str) -> None:
+	"""Delete the temp PNG and its parent directory if it was ours."""
+	try:
+		parent = os.path.dirname(path)
+		if os.path.exists(path):
+			os.remove(path)
+		if os.path.isdir(parent) and "dialogorithm_" in os.path.basename(parent):
+			os.rmdir(parent)
+	except Exception as err:
+		logger.warning("Temp cleanup failed: %s", err)
 
 
 def on_generate() -> None:
@@ -338,16 +549,15 @@ def _generation_worker(full_international: str, signature_text: str) -> None:
 		root.after(0, _on_generation_error, str(e))
 
 
-def _on_generation_success(output_path: str) -> None:
-	"""Re-enable the generate button and show the success status."""
-	"""Called on the main thread after successful generation."""
+def _on_generation_success(temp_path: str) -> None:
+	"""Re-enable the generate button and open the preview popout."""
 	generate_button.config(state='normal', text="🎯 Generate LaTeX Image")
-	status_label.config(text=f"✅ Saved to: {output_path}", fg="#006600")
+	status_label.config(text="Preview ready — save or discard below.", fg="#004488")
+	open_preview_popout(temp_path)
 
 
 def _on_generation_error(error_msg: str) -> None:
 	"""Re-enable the generate button and report the error to the user."""
-	"""Called on the main thread after a generation failure."""
 	generate_button.config(state='normal', text="🎯 Generate LaTeX Image")
 	status_label.config(text=f"❌ Generation failed — check the log for details.", fg="#cc0000")
 	messagebox.showerror("Error", f"Failed to generate image:\n{error_msg}")
@@ -401,7 +611,17 @@ country_combo.bind("<<ComboboxSelected>>", on_country_select)
 
 # --- FORMAT LABEL ---
 format_label = tk.Label(root, text="Format: Choose continent, subregion, and country", font=("Arial", 10), fg="gray")
-format_label.pack(pady=(2, 10))
+format_label.pack(pady=(2, 5))
+
+# --- NUMBER TYPE (shown only for countries with special prefixes) ---
+number_type_frame = tk.Frame(root)
+# Not packed yet — on_country_select shows/hides it dynamically
+tk.Label(number_type_frame, text="Number type:", font=("Arial", 11)).pack(anchor="w")
+number_type_var = tk.StringVar()
+number_type_combo = ttk.Combobox(number_type_frame, textvariable=number_type_var,
+                                 values=[], font=("Arial", 11), width=35, state='disabled')
+number_type_combo.pack(pady=(3, 0))
+number_type_combo.bind("<<ComboboxSelected>>", on_number_type_select)
 
 # --- PHONE ENTRY ---
 phone_input_frame = tk.Frame(root)
@@ -418,9 +638,14 @@ local_number_var.trace_add('write', on_number_change)
 # FIXED: Use entry field wide enough for longest possible phone numbers
 # Longest numbers can be up to 15 digits + country code display + formatting
 vcmd = (root.register(create_validation()), '%S', '%P')
-entry_local = tk.Entry(phone_input_frame, width=60, font=("Arial", 12), textvariable=local_number_var, state='disabled',
+entry_local = tk.Entry(phone_input_frame, width=50, font=("Arial", 12), textvariable=local_number_var, state='disabled',
                        validate='key', validatecommand=vcmd)
 entry_local.grid(row=1, column=1, sticky="w")
+entry_local.bind("<<Paste>>", on_paste)
+
+clear_button = tk.Button(phone_input_frame, text="✕ Clear", command=clear_number,
+                         font=("Arial", 10), width=7)
+clear_button.grid(row=1, column=2, padx=(6, 0))
 
 formatted_display = tk.Label(phone_input_frame, text="", font=("Arial", 11), fg="#0066CC")
 formatted_display.grid(row=2, column=0, columnspan=2, pady=(5, 0))
@@ -461,11 +686,11 @@ button_frame = tk.Frame(root)
 button_frame.pack(pady=(20, 5))
 generate_button = tk.Button(button_frame, text="🎯 Generate LaTeX Image", command=on_generate,
                             font=("Arial", 14, "bold"), width=25, height=2)
-generate_button.pz1ack()
+generate_button.pack()
 
 # --- STATUS LABEL ---
-status_label = tk.Label(root, text="Ready.", font=("Arial", 10), fg="gray", wraplength=650)
-status_label.pack(pady=(0, 15))
+status_label = tk.Label(root, text="Ready.", font=("Arial", 10), fg="gray", wraplength=700)
+status_label.pack(pady=(0, 5))
 
 # --- DEBUG: Print initial state ---
 logger.info("=== Dialogorithm started ===")
