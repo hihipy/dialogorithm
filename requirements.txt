@@ -1,0 +1,20 @@
+# dialogorithm Python dependencies
+# Install with: pip install -r requirements.txt
+pillow>=9.0.0
+
+# System dependencies (not pip-installable):
+# These provide pdflatex and pdftoppm which are required for rendering.
+#
+# macOS:
+#   brew install --cask mactex
+#
+# Ubuntu/Debian:
+#   sudo apt install texlive-full
+#
+# Windows:
+#   1. Install MiKTeX: https://miktex.org/download
+#      MiKTeX provides pdflatex and will auto-install missing LaTeX packages on first run.
+#   2. Install Poppler (provides pdftoppm):
+#      Download from https://github.com/oschwartz10612/poppler-windows/releases
+#      Extract and add the bin/ folder to your system PATH.
+#   3. Restart your terminal after updating PATH.

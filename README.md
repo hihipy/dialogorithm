@@ -78,6 +78,11 @@ brew install --cask mactex
 # Ubuntu/Debian
 sudo apt install texlive-full
 
+# Windows
+# 1. MiKTeX (pdflatex): https://miktex.org/download
+# 2. Poppler (pdftoppm): https://github.com/oschwartz10612/poppler-windows/releases
+#    Extract and add the bin/ folder to your system PATH
+
 # Launch the app
 python dialogorithm.py
 ```
