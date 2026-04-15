@@ -18,10 +18,7 @@ that evaluates to that digit. No two expressions in a single number repeat.
 The output is typeset in LaTeX and rendered as a clean, single-line image
 sized for practical use.
 
-A US number like `+1 (555) 867-5309` might render as:
-
-> **Business line:**
-> +(h¹¹(ℙ¹)) ( (lim 2(s−1)ζ(s)) (Tr(Tᵃ_{su(n)})) (χ(ℂP²)−1) ) ∑ b₂ᵢ(ℂP¹) (dim(e₇)−125) (rank(e₇)−2) — (lk(L2a1)) (rank(e₈)−2) (∫dx/(1+x²)⁴ · 128/5π) (rank(e₇)−3)
+![Example output for +1 (555) 123-4567](examples/example_us.png)
 
 Every expression is mathematically verified to evaluate to its digit.
 The bank covers Weyl group orders, class numbers of imaginary quadratic fields,
@@ -133,6 +130,9 @@ Then:
 ```
 dialogorithm/
 ├── dialogorithm.py          # Desktop GUI (Tkinter) and app entry point
+├── requirements.txt
+├── examples/
+│   └── example_us.png
 └── support_files/
     ├── equation_bank.py     # 200+ LaTeX equation templates, digits 0–9
     ├── latex_processor.py   # Document assembly, pdflatex pipeline, PNG output
