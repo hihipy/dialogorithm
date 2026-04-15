@@ -363,30 +363,33 @@ def open_preview_popout(temp_path: str) -> None:
 	popout.configure(bg="#1e1e2e")
 	popout.grab_set()
 
-	# ── Image — full native resolution, horizontal scroll if wider than screen ─
+	# ── Image — scaled to fit window, full-res saved separately ──────────────
 	try:
 		img = Image.open(temp_path)
 		w, h = img.size
 
-		screen_w = root.winfo_screenwidth() - 80
-		canvas_w = min(w, screen_w)
+		# Scale down to fit comfortably on screen — max 1200px wide
+		max_w = min(1200, root.winfo_screenwidth() - 100)
+		if w > max_w:
+			scale = max_w / w
+			display_w = int(w * scale)
+			display_h = int(h * scale)
+			display_img = img.resize((display_w, display_h), Image.Resampling.LANCZOS)
+		else:
+			display_img = img
+			display_w, display_h = w, h
 
 		canvas_frame = tk.Frame(popout, bg="#1e1e2e")
 		canvas_frame.pack(fill="both", expand=True, padx=15, pady=(15, 5))
 
-		canvas = tk.Canvas(canvas_frame, width=canvas_w, height=h + 4,
+		canvas = tk.Canvas(canvas_frame, width=display_w, height=display_h + 4,
 		                   bg="white", highlightthickness=0)
-		scrollbar = ttk.Scrollbar(canvas_frame, orient="horizontal",
-		                          command=canvas.xview)
-		canvas.configure(xscrollcommand=scrollbar.set)
 
-		photo = ImageTk.PhotoImage(img)
+		photo = ImageTk.PhotoImage(display_img)
 		canvas.create_image(0, 0, anchor="nw", image=photo)
 		canvas.image = photo
-		canvas.configure(scrollregion=(0, 0, w, h))
+		canvas.configure(scrollregion=(0, 0, display_w, display_h))
 		canvas.pack(side="top")
-		if w > screen_w:
-			scrollbar.pack(side="top", fill="x")
 
 	except Exception as err:
 		tk.Label(popout, text=f"Could not load preview:\n{err}",
