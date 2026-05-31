@@ -1,5 +1,15 @@
 # dialogorithm
 
+[![Link Check](https://github.com/hihipy/dialogorithm/actions/workflows/links.yml/badge.svg)](https://github.com/hihipy/dialogorithm/actions/workflows/links.yml)
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+
+**Built with**
+
+[![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)](https://python.org)
+[![Tkinter](https://img.shields.io/badge/Tkinter-FFD43B?style=flat&logo=python&logoColor=black)](https://docs.python.org/3/library/tkinter.html)
+[![Pillow](https://img.shields.io/badge/Pillow-6A5ACD?style=flat&logoColor=white)](https://python-pillow.github.io)
+[![LaTeX](https://img.shields.io/badge/LaTeX-008080?style=flat&logo=latex&logoColor=white)](https://www.latex-project.org)
+
 **Turn phone numbers into PhD-level mathematical art.**
 
 `dialogorithm` takes any international phone number and replaces each digit
