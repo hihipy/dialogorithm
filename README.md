@@ -13,7 +13,7 @@
 **Turn phone numbers into PhD-level mathematical art.**
 
 `dialogorithm` takes any international phone number and replaces each digit
-with a rigorous, graduate-level mathematical expression — drawing from Lie
+with a rigorous, graduate-level mathematical expression, drawing from Lie
 theory, algebraic geometry, topology, number theory, complex analysis, and
 mathematical physics. The result is rendered as a high-quality PNG you can
 drop straight into an email signature, business card, or anywhere else you
@@ -30,32 +30,32 @@ sized for practical use.
 
 ![Example output for +1 (555) 123-4567](examples/example_us.png)
 
-Every expression is mathematically verified to evaluate to its digit.
-The bank covers Weyl group orders, class numbers of imaginary quadratic fields,
-Euler characteristics, Betti numbers, residues, Bessel function Wronskians,
-and more — over 200 templates across all ten digits, all mathematically audited.
+Every expression is verified to evaluate to its digit. The bank covers Weyl
+group orders, class numbers of imaginary quadratic fields, Euler
+characteristics, Betti numbers, residues, Bessel function Wronskians, and
+more: over 200 templates across all ten digits, each one checked by hand.
 
 ---
 
 ## Features
 
-- **249+ countries supported** — full UN M49 geoscheme (continent → subregion → country),
+- **249+ countries supported:** full UN M49 geoscheme (continent → subregion → country),
   with per-country digit limits and display formatting that matches the country's own template as you type
-- **Special number prefixes** — toll-free, premium, business, and shared rate prefixes
+- **Special number prefixes:** toll-free, premium, business, and shared rate prefixes
   for 56 countries (184 prefixes total), selectable from a dropdown after choosing a country
-- **200+ verified equation templates** — 20–25 per digit, spanning Lie theory,
+- **200+ verified equation templates:** 20-25 per digit, spanning Lie theory,
   algebraic geometry, topology, number theory, complex analysis, and mathematical
-  physics; all mathematically audited with zero incorrect expressions
-- **Uniqueness guarantee** — no expression repeats within a single number
-- **LaTeX rendering pipeline** — `pdflatex` + `pdftoppm`, standalone document,
+  physics; all checked by hand with zero incorrect expressions
+- **Uniqueness guarantee:** no expression repeats within a single number
+- **LaTeX rendering pipeline:** `pdflatex` + `pdftoppm`, standalone document,
   auto-cropped to content, rendered at 250 DPI
-- **Preview popout** — see the result before committing; save with a custom filename
+- **Preview popout:** see the result before committing; save with a custom filename
   to any folder, or discard with nothing written to disk
-- **Smart paste** — paste any phone number format (`(786) 212-6394`, `786-212-6394`,
-  `+1 786 212 6394`) and digits are extracted automatically
-- **Desktop GUI** — Tkinter, country/subregion dropdowns, signature line picker,
+- **Flexible paste:** paste any phone number format (`(786) 212-6394`, `786-212-6394`,
+  `+1 786 212 6394`) and the digits are extracted automatically
+- **Desktop GUI:** Tkinter, country/subregion dropdowns, signature line picker,
   custom text support, clear button
-- **Optional file logging** — checkbox-controlled, single unified log in Downloads
+- **Optional file logging:** checkbox-controlled, single unified log in Downloads
 
 ---
 
@@ -68,18 +68,18 @@ Each run opens a preview popout. If you save:
 | `<your filename>.png` | PNG at 250 DPI | Email signatures, business cards, social profiles |
 
 The file is only written to disk if you click **Save**. Discarding deletes the
-temp file — nothing stays on your computer.
+temp file, so nothing stays on your computer.
 
 ---
 
 ## How many unique outputs are possible?
 
-Each digit is drawn from a pool of 22–25 verified mathematical expressions.
-No expression repeats within a single number. Every time you generate the same
-number you will almost certainly get a completely different image.
+Each digit is drawn from a pool of 22-25 verified mathematical expressions.
+No expression repeats within a single number, so each time you generate the
+same number you will almost certainly get a completely different image.
 
-The number of possible outputs scales with total digit count — longer numbers
-(more digits in the country code + local number) produce astronomically more
+The number of possible outputs scales with total digit count. Longer numbers
+(more digits in the country code plus local number) produce far more
 combinations.
 
 **Examples by country:**
@@ -97,14 +97,14 @@ combinations.
 | 🇧🇷 Brazil | +55 11 91234-5678 | ~606 quadrillion |
 | 🇩🇪 Germany | +49 151 2345 6789 | ~793 quadrillion |
 
-Germany and Brazil top the list simply because their numbers have more total
-digits — each additional digit multiplies the combinations by another 20–25.
+Germany and Brazil top the list because their numbers have more total
+digits, and each additional digit multiplies the combinations by another 20-25.
 
 ---
 
 ## Getting started
 
-```bash
+````bash
 # Install Python dependencies
 pip install pillow
 
@@ -122,13 +122,13 @@ sudo apt install texlive-full
 
 # Launch the app
 python dialogorithm.py
-```
+````
 
 Then:
 
 1. Choose a **continent → subregion → country** from the dropdowns
 2. Optionally select a **number type** (toll-free, premium, etc.) to pre-fill the prefix
-3. Enter your local phone number — or paste any formatted number and it will be cleaned automatically
+3. Enter your local phone number, or paste any formatted number and it will be cleaned automatically
 4. Pick a **signature line** (random, preset, or custom)
 5. Click **Generate LaTeX Image**
 6. Review the preview, set your filename and save location, then click **Save**
@@ -137,7 +137,7 @@ Then:
 
 ## Project structure
 
-```
+````
 dialogorithm/
 ├── dialogorithm.py          # Desktop GUI (Tkinter) and app entry point
 ├── requirements.txt
@@ -147,15 +147,15 @@ dialogorithm/
     ├── equation_bank.py     # 200+ LaTeX equation templates, digits 0–9
     ├── latex_processor.py   # Document assembly, pdflatex pipeline, PNG output
     └── phone_formats.py     # 249+ countries, UN geoscheme, digit limits, special prefixes
-```
+````
 
 ---
 
 ## Requirements
 
 - Python 3.10+
-- `pillow` — image preview and handling in the GUI
-- **TeX Live** (or MacTeX) — `pdflatex` and `pdftoppm` must be on your PATH
+- `pillow` - image preview and handling in the GUI
+- **TeX Live** (or MacTeX) - `pdflatex` and `pdftoppm` must be on your PATH
 
 No internet connection required after install. Everything runs locally.
 
@@ -177,9 +177,9 @@ No internet connection required after install. Everything runs locally.
 
 Licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
 
-You are free to use, share, and adapt this work — including for your job —
+You are free to use, share, and adapt this work, including for your job,
 under these terms:
 
-- **Attribution** — Credit the original author
-- **NonCommercial** — Not for selling or commercial products
-- **ShareAlike** — Derivatives must use the same license
+- **Attribution:** Credit the original author
+- **NonCommercial:** Not for selling or commercial products
+- **ShareAlike:** Derivatives must use the same license
