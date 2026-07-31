@@ -12,7 +12,7 @@
 
 **Turn phone numbers into PhD-level mathematical art.**
 
-`dialogorithm` takes any international phone number and replaces each digit
+Dialogorithm takes any international phone number and replaces each digit
 with a rigorous, graduate-level mathematical expression, drawing from Lie
 theory, algebraic geometry, topology, number theory, complex analysis, and
 mathematical physics. The result is rendered as a high-quality PNG you can
