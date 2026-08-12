@@ -5,10 +5,10 @@
 
 **Built with**
 
+[![LaTeX](https://img.shields.io/badge/LaTeX-008080?style=flat&logo=latex&logoColor=white)](https://www.latex-project.org)
+[![Pillow](https://img.shields.io/badge/Pillow-6A5ACD?style=flat&logoColor=white)](https://python-pillow.github.io)
 [![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)](https://python.org)
 [![Tkinter](https://img.shields.io/badge/Tkinter-FFD43B?style=flat&logo=python&logoColor=black)](https://docs.python.org/3/library/tkinter.html)
-[![Pillow](https://img.shields.io/badge/Pillow-6A5ACD?style=flat&logoColor=white)](https://python-pillow.github.io)
-[![LaTeX](https://img.shields.io/badge/LaTeX-008080?style=flat&logo=latex&logoColor=white)](https://www.latex-project.org)
 
 **Turn phone numbers into PhD-level mathematical art.**
 
