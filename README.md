@@ -144,7 +144,7 @@ dialogorithm/
 ├── examples/
 │   └── example_us.png
 └── support_files/
-    ├── equation_bank.py     # 200+ LaTeX equation templates, digits 0–9
+    ├── equation_bank.py     # 200+ LaTeX equation templates, digits 0-9
     ├── latex_processor.py   # Document assembly, pdflatex pipeline, PNG output
     └── phone_formats.py     # 249+ countries, UN geoscheme, digit limits, special prefixes
 ````
